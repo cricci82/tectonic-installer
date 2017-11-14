@@ -1,0 +1,438 @@
+data "ignition_config" "etcd_cis" {
+  count = "${length(var.external_endpoints) == 0 ? var.instance_count : 0}"
+
+  disks = [
+    "${data.ignition_disk.sda.id}"
+  ]
+
+  filesystems = [
+    "${data.ignition_filesystem.var.id}",
+    "${data.ignition_filesystem.log.id}",
+    "${data.ignition_filesystem.audit.id}",
+    "${data.ignition_filesystem.home.id}",
+  ]
+
+  systemd = [
+    "${data.ignition_systemd_unit.locksmithd.*.id[count.index]}",
+    "${var.ign_etcd_dropin_id_list[count.index]}",
+    "${data.ignition_systemd_unit.etcd_unzip_tls.id}",
+    "${data.ignition_systemd_unit.tmpmount.id}",
+    "${data.ignition_systemd_unit.varmount.id}",
+    "${data.ignition_systemd_unit.vartmpmount.id}",
+    "${data.ignition_systemd_unit.varlogmount.id}",
+    "${data.ignition_systemd_unit.varauditmount.id}",
+    "${data.ignition_systemd_unit.homemount.id}",
+    "${data.ignition_systemd_unit.bootmount.id}",
+    "${data.ignition_systemd_unit.hardener.id}",
+  ]
+
+  files = [
+    "${data.ignition_file.node_hostname.*.id[count.index]}",
+    "${data.ignition_file.etcd_tls_zip.id}",
+    "${data.ignition_file.fstab.id}",
+    "${data.ignition_file.selinuxconfig.id}",
+    "${data.ignition_file.issue.id}",
+    "${data.ignition_file.issuenet.id}",
+    "${data.ignition_file.modprobecisconf.id}",
+    "${data.ignition_file.sysctlcisconf.id}",
+    "${data.ignition_file.su.id}",
+    "${data.ignition_file.systemauth.id}",
+    "${data.ignition_file.hardener.id}",
+  ]
+}
+
+data "ignition_file" "node_hostname" {
+  count      = "${length(var.external_endpoints) == 0 ? var.instance_count : 0}"
+  path       = "/etc/hostname"
+  mode       = 0644
+  filesystem = "root"
+
+  content {
+    content = "${var.cluster_name}-etcd-${count.index}.${var.base_domain}"
+  }
+}
+
+data "ignition_file" "etcd_tls_zip" {
+  path       = "/etc/ssl/etcd/tls.zip"
+  mode       = 0400
+  uid        = 0
+  gid        = 0
+  filesystem = "root"
+
+  content {
+    mime    = "application/octet-stream"
+    content = "${var.tls_zip}"
+  }
+}
+
+data "ignition_systemd_unit" "etcd_unzip_tls" {
+  name   = "etcd-unzip-tls.service"
+  enable = true
+
+  content = <<EOF
+[Unit]
+ConditionPathExists=!/etc/ssl/etcd/ca.crt
+[Service]
+Type=oneshot
+WorkingDirectory=/etc/ssl/etcd
+ExecStart=/usr/bin/bash -c 'unzip /etc/ssl/etcd/tls.zip && \
+chown etcd:etcd /etc/ssl/etcd/peer.* && \
+chown etcd:etcd /etc/ssl/etcd/server.* && \
+chmod 0400 /etc/ssl/etcd/peer.* /etc/ssl/etcd/server.* /etc/ssl/etcd/client.*'
+[Install]
+WantedBy=multi-user.target
+RequiredBy=etcd-member.service locksmithd.service
+EOF
+}
+
+data "ignition_systemd_unit" "locksmithd" {
+  count = "${length(var.external_endpoints) == 0 ? var.instance_count : 0}"
+
+  name   = "locksmithd.service"
+  enable = true
+
+  dropin = [
+    {
+      name = "40-etcd-lock.conf"
+
+      content = <<EOF
+[Service]
+Environment=REBOOT_STRATEGY=etcd-lock
+${var.tls_enabled ? "Environment=\"LOCKSMITHD_ETCD_CAFILE=/etc/ssl/etcd/ca.crt\"" : ""}
+${var.tls_enabled ? "Environment=\"LOCKSMITHD_ETCD_KEYFILE=/etc/ssl/etcd/client.key\"" : ""}
+${var.tls_enabled ? "Environment=\"LOCKSMITHD_ETCD_CERTFILE=/etc/ssl/etcd/client.crt\"" : ""}
+Environment="LOCKSMITHD_ENDPOINT=${var.tls_enabled ? "https" : "http"}://${var.cluster_name}-etcd-${count.index}.${var.base_domain}:2379"
+EOF
+    },
+  ]
+}
+
+###################### CIS Config  #########################
+data "ignition_disk" "sda" {
+    device = "/dev/sda"
+    wipe_table = true
+    partition {
+        # 1.1.6 Ensure separate partition exists for /var
+          label = "VAR"
+          number = 1
+          size = 4
+    }
+    partition {
+          label = "LOG"
+          number = 2
+          size = 4      
+    } 
+    partition {
+        # 1.1.6 Ensure separate partition exists for /var
+          label = "AUDIT"
+          number = 3
+          size = 4
+    }
+    partition {
+          label = "HOME"
+          number = 4
+          size = 4      
+    } 
+}
+
+data "ignition_filesystem" "var" {
+    name = "var"
+    mount {
+        device = "/dev/disk/by-partlabel/VAR"
+        format = "ext4"
+        create = true
+        options = ["-L", "VAR"]
+    }
+}
+
+data "ignition_filesystem" "log" {
+    name = "log"
+    mount {
+        device = "/dev/disk/by-partlabel/LOG"
+        format = "ext4"
+        create = true
+        options = ["-L", "LOG"]
+    }
+}
+
+data "ignition_filesystem" "audit" {
+    name = "audit"
+    mount {
+        device = "/dev/disk/by-partlabel/AUDIT"
+        format = "ext4"
+        create = true
+        options = ["-L", "AUDIT"]
+    }
+}
+
+data "ignition_filesystem" "home" {
+    name = "home"
+    mount {
+        device = "/dev/disk/by-partlabel/HOME"
+        format = "ext4"
+        create = true
+        options = ["-L", "HOME"]
+    }
+}
+
+data "template_file" "fstab" {
+  template = "${file("${path.module}/resources/etc/fstab")}"
+}
+
+data "ignition_file" "fstab" {
+  filesystem = "root"
+  path       = "/etc/fstab"
+
+  content {
+    content = "${data.template_file.fstab.rendered}"
+  }
+}
+
+data "template_file" "selinuxconfig" {
+  template = "${file("${path.module}/resources/etc/selinux/config")}"
+}
+
+data "ignition_file" "selinuxconfig" {
+  filesystem = "root"
+  path       = "/etc/selinux/config"
+
+  content {
+    content = "${data.template_file.selinuxconfig.rendered}"
+  }
+}
+
+data "template_file" "issue" {
+  template = "${file("${path.module}/resources/etc/issue")}"
+}
+
+data "ignition_file" "issue" {
+  filesystem = "root"
+  path       = "/etc/issue"
+  mode       = 0644
+  content {
+    content = "${data.template_file.issue.rendered}"
+  }
+}
+
+data "template_file" "issuenet" {
+  template = "${file("${path.module}/resources/etc/issue.net")}"
+}
+
+data "ignition_file" "issuenet" {
+  filesystem = "root"
+  path       = "/etc/issue.net"
+  mode       = 0644
+  content {
+    content = "${data.template_file.issuenet.rendered}"
+  }
+}
+
+data "template_file" "modprobecisconf" {
+  template = "${file("${path.module}/resources/etc/modprobe.d/cis.conf")}"
+}
+
+data "ignition_file" "modprobecisconf" {
+  filesystem = "root"
+  path       = "/etc/modprobe.d/cis.conf"
+  mode       = 0600
+  content {
+    content = "${data.template_file.modprobecisconf.rendered}"
+  }
+}
+
+data "template_file" "sysctlcisconf" {
+  template = "${file("${path.module}/resources/etc/sysctl.d/cis.conf")}"
+}
+
+data "ignition_file" "sysctlcisconf" {
+  filesystem = "root"
+  path       = "/etc/sysctl.d/cis.conf"
+  mode       = 0600
+  content {
+    content = "${data.template_file.sysctlcisconf.rendered}"
+  }
+}
+
+data "template_file" "su" {
+  template = "${file("${path.module}/resources/etc/pam.d/su")}"
+}
+
+data "ignition_file" "su" {
+  filesystem = "root"
+  path       = "/etc/pam.d/su"
+  mode       = 0644
+  content {
+    content = "${data.template_file.su.rendered}"
+  }
+}
+
+data "template_file" "systemauth" {
+  template = "${file("${path.module}/resources/etc/pam.d/system-auth")}"
+}
+
+data "ignition_file" "systemauth" {
+  filesystem = "root"
+  path       = "/etc/pam.d/system-auth"
+  mode       = 0644
+  content {
+    content = "${data.template_file.systemauth.rendered}"
+  }
+}
+
+data "template_file" "hardener" {
+  template = "${file("${path.module}/resources/root/hardener.sh")}"
+}
+
+data "ignition_file" "hardener" {
+  filesystem = "root"
+  path       = "/root/hardener.sh"
+  mode       = 0700
+  content {
+    content = "${data.template_file.hardener.rendered}"
+  }
+}
+
+data "ignition_systemd_unit" "tmpmount" {
+  name   = "tmp.mount"
+  enable = true
+
+  dropin = [
+    {
+      name = "no-exec.conf"
+
+      content = <<EOF
+[Mount]
+Options=mode=1777,strictatime,nosuid,nodev,noexec
+EOF
+    },
+  ]
+}
+
+data "ignition_systemd_unit" "varmount" {
+  name   = "var.mount"
+  enable = true
+
+  content = <<EOF
+[Unit]
+Conflicts=umount.target
+Before=local-fs.target umount.target
+
+[Mount]
+What=/dev/disk/by-label/VAR
+Where=/var
+EOF
+}
+
+data "ignition_systemd_unit" "vartmpmount" {
+  name   = "var-tmp.mount"
+  enable = true
+
+  content = <<EOF
+[Unit]
+DefaultDependencies=no
+Conflicts=umount.target
+Before=local-fs.target umount.target
+After=swap.target
+
+[Mount]
+What=tmpfs
+Where=/var/tmp
+Type=tmpfs
+Options=mode=1777,strictatime,nosuid,nodev,noexec
+
+[Install]
+RequiredBy=local-fs.target
+EOF
+}
+
+data "ignition_systemd_unit" "varlogmount" {
+  name   = "var-log.mount"
+  enable = true
+
+  content = <<EOF
+[Unit]
+DefaultDependencies=no
+Conflicts=umount.target
+Before=local-fs.target umount.target
+
+[Mount]
+What=/dev/disk/by-label/LOG
+Where=/var/log
+
+[Install]
+RequiredBy=local-fs.target
+EOF
+}
+
+data "ignition_systemd_unit" "varauditmount" {
+  name   = "var-log-audit.mount"
+  enable = true
+
+  content = <<EOF
+[Unit]
+DefaultDependencies=no
+Conflicts=umount.target
+Before=local-fs.target umount.target
+
+[Mount]
+What=/dev/disk/by-label/AUDIT
+Where=/var/log/audit
+
+[Install]
+RequiredBy=local-fs.target
+EOF
+}
+
+data "ignition_systemd_unit" "homemount" {
+  name   = "home.mount"
+  enable = true
+
+  content = <<EOF
+[Unit]
+DefaultDependencies=no
+Conflicts=umount.target
+Before=local-fs.target umount.target
+
+[Mount]
+What=/dev/disk/by-label/HOME
+Where=/home
+Options=nodev
+
+[Install]
+RequiredBy=local-fs.target
+EOF
+}
+
+data "ignition_systemd_unit" "bootmount" {
+  name   = "boot.mount"
+  enable = true
+
+  dropin = [
+    {
+      name = "noread.conf"
+
+      content = <<EOF
+[Mount]
+Options=rw,relatime,fmask=0077,dmask=0022,codepage=437,iocharset=ascii
+EOF
+    },
+  ]
+}
+
+data "ignition_systemd_unit" "hardener" {
+  name   = "hardener.service"
+  enable = true
+
+  content = <<EOF
+[Unit]
+Description=CIS Hardener
+ConditionFirstBoot=yes
+
+[Service]
+Type=oneshot
+ExecStart=/root/hardener.sh
+
+[Install]
+WantedBy=multi-user.target
+EOF
+}
