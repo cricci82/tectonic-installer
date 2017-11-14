@@ -87,6 +87,7 @@ module "etcd" {
   tls_enabled             = "${var.tectonic_etcd_tls_enabled}"
   tls_zip                 = "${module.etcd_certs.etcd_tls_zip}"
   ign_etcd_dropin_id_list = "${module.ignition_masters.etcd_dropin_id_list}"
+  #etcd_profile            = "${aws_s3_bucket_object.ignition-etcd-profile.bucket}/${aws_s3_bucket_object.ignition-etcd-profile.key}"
 }
 
 module "ignition_masters" {
@@ -108,6 +109,7 @@ module "ignition_masters" {
   kubelet_node_label        = "node-role.kubernetes.io/master"
   kubelet_node_taints       = "node-role.kubernetes.io/master=:NoSchedule"
   tectonic_vanilla_k8s      = "${var.tectonic_vanilla_k8s}"
+  #master_profile            = "${aws_s3_bucket_object.ignition-master-profile.bucket}/${aws_s3_bucket_object.ignition-master-profile.key}"
 }
 
 module "masters" {
@@ -145,7 +147,7 @@ module "masters" {
   root_volume_type                  = "${var.tectonic_aws_master_root_volume_type}"
   ssh_key                           = "${var.tectonic_aws_ssh_key}"
   subnet_ids                        = "${module.vpc.master_subnet_ids}"
-}
+ }
 
 module "ignition_workers" {
   source = "../../modules/ignition"
@@ -160,6 +162,7 @@ module "ignition_workers" {
   kubelet_node_label   = "node-role.kubernetes.io/node"
   kubelet_node_taints  = ""
   tectonic_vanilla_k8s = "${var.tectonic_vanilla_k8s}"
+  #worker_profile       = "${aws_s3_bucket_object.ignition-worker-profile.bucket}/${aws_s3_bucket_object.ignition-worker-profile.key}"
 }
 
 module "workers" {
