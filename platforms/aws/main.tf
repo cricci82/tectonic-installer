@@ -110,6 +110,7 @@ module "ignition_masters" {
   kubelet_node_taints       = "node-role.kubernetes.io/master=:NoSchedule"
   tectonic_vanilla_k8s      = "${var.tectonic_vanilla_k8s}"
   #master_profile            = "${aws_s3_bucket_object.ignition-master-profile.bucket}/${aws_s3_bucket_object.ignition-master-profile.key}"
+  
 }
 
 module "masters" {
@@ -147,6 +148,16 @@ module "masters" {
   root_volume_type                  = "${var.tectonic_aws_master_root_volume_type}"
   ssh_key                           = "${var.tectonic_aws_ssh_key}"
   subnet_ids                        = "${module.vpc.master_subnet_ids}"
+  ign_hardner_file_id               = "${module.ignition_masters.ign_hardner_file_id}"
+  ign_fstab_file_id                 = "${module.ignition_masters.ign_fstab_file_id}"
+  ign_selinuxconfig_file_id         = "${module.ignition_masters.ign_selinuxconfig_file_id}"
+  ign_issue_file_id                 = "${module.ignition_masters.ign_issue_file_id}"
+  ign_su_file_id                    = "${module.ignition_masters.ign_su_file_id}"
+  ign_modprobe_file_id              = "${module.ignition_masters.ign_modprobe_file_id}"
+  ign_sysctlcisconf_file_id         = "${module.ignition_masters.ign_sysctlcisconf_file_id}"
+  ign_systemauth_file_id            = "${module.ignition_masters.ign_systemauth_file_id}"
+  ign_issuenet_file_id              = "${module.ignition_masters.ign_issuenet_file_id}"
+  
  }
 
 module "ignition_workers" {
@@ -193,6 +204,16 @@ module "workers" {
   ign_locksmithd_service_id         = "${module.ignition_masters.locksmithd_service_id}"
   ign_max_user_watches_id           = "${module.ignition_workers.max_user_watches_id}"
   ign_s3_puller_id                  = "${module.ignition_workers.s3_puller_id}"
+  ign_hardner_file_id               = "${module.ignition_masters.ign_hardner_file_id}"
+  ign_fstab_file_id                 = "${module.ignition_masters.ign_fstab_file_id}"
+  ign_selinuxconfig_file_id         = "${module.ignition_masters.ign_selinuxconfig_file_id}"
+  ign_issue_file_id                 = "${module.ignition_masters.ign_issue_file_id}"
+  ign_su_file_id                    = "${module.ignition_masters.ign_su_file_id}"
+  ign_modprobe_file_id              = "${module.ignition_masters.ign_modprobe_file_id}"
+  ign_sysctlcisconf_file_id         = "${module.ignition_masters.ign_sysctlcisconf_file_id}"
+  ign_systemauth_file_id            = "${module.ignition_masters.ign_systemauth_file_id}"
+  ign_issuenet_file_id              = "${module.ignition_masters.ign_issuenet_file_id}"
+  
 }
 
 module "dns" {

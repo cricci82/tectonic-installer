@@ -87,115 +87,115 @@ output "coreos_metadata_dropin_rendered" {
 }
 
 # CIS Hardening
-output "cis_sda_disk_id" {
+output "ign_sda_disk_id" {
   value = "${data.ignition_disk.sda.id}"
 }
 
-output "cis_sda_disk_rendered" {
+output "ign_sda_disk_rendered" {
   value = "${data.ignition_disk.sda.rendered}"
 }
 
-output "cis_var_filesystem_id" {
+output "ign_var_filesystem_id" {
   value = "${data.ignition_filesystem.var.id}"
 }
 
-output "cis_var_filesystem_rendered" {
+output "ign_var_filesystem_rendered" {
   value = "${data.ignition_filesystem.var.rendered}"
 }
 
-output "cis_log_filesystem_id" {
+output "ign_log_filesystem_id" {
   value = "${data.ignition_filesystem.log.id}"
 }
 
-output "cis_log_filesystem_rendered" {
+output "ign_log_filesystem_rendered" {
   value = "${data.ignition_filesystem.log.rendered}"
 }
 
-output "cis_audit_filesystem_id" {
+output "ign_audit_filesystem_id" {
   value = "${data.ignition_filesystem.audit.id}"
 }
 
-output "cis_audit_filesystem_rendered" {
+output "ign_audit_filesystem_rendered" {
   value = "${data.ignition_filesystem.audit.rendered}"
 }
 
-output "cis_home_filesystem_id" {
+output "ign_home_filesystem_id" {
   value = "${data.ignition_filesystem.home.id}"
 }
 
-output "cis_home_filesystem_rendered" {
+output "ign_home_filesystem_rendered" {
   value = "${data.ignition_filesystem.home.rendered}"
 }
 
-output "cis_fstab_file_id" {
+output "ign_fstab_file_id" {
   value = "${data.ignition_file.fstab.id}"
 }
 
-output "cis_fstab_file_rendered" {
+output "ign_fstab_file_rendered" {
   value = "${data.ignition_file.fstab.rendered}"
 }
 
-output "cis_selinuxconfig_file_id" {
+output "ign_selinuxconfig_file_id" {
   value = "${data.ignition_file.selinuxconfig.id}"
 }
 
-output "cis_selinuxconfig_file_rendered" {
+output "ign_selinuxconfig_file_rendered" {
   value = "${data.ignition_file.selinuxconfig.rendered}"
 }
 
-output "cis_issue_file_id" {
+output "ign_issue_file_id" {
   value = "${data.ignition_file.issue.id}"
 }
 
-output "cis_issue_file_rendered" {
+output "ign_issue_file_rendered" {
   value = "${data.ignition_file.issue.rendered}"
 }
 
-output "cis_issuenet_file_id" {
+output "ign_issuenet_file_id" {
   value = "${data.ignition_file.issuenet.id}"
 }
 
-output "cis_issuenet_file_rendered" {
+output "ign_issuenet_file_rendered" {
   value = "${data.ignition_file.issuenet.rendered}"
 }
 
-output "cis_modprobe_file_id" {
+output "ign_modprobe_file_id" {
   value = "${data.ignition_file.modprobecisconf.id}"
 }
 
-output "cis_modprobe_file_rendered" {
+output "ign_modprobe_file_rendered" {
   value = "${data.ignition_file.modprobecisconf.rendered}"
 }
 
-output "cis_sysctlcisconf_file_id" {
+output "ign_sysctlcisconf_file_id" {
   value = "${data.ignition_file.sysctlcisconf.id}"
 }
 
-output "cis_sysctlcisconf_file_rendered" {
+output "ign_sysctlcisconf_file_rendered" {
   value = "${data.ignition_file.sysctlcisconf.rendered}"
 }
 
-output "cis_su_file_id" {
+output "ign_su_file_id" {
   value = "${data.ignition_file.su.id}"
 }
 
-output "cis_su_file_rendered" {
+output "ign_su_file_rendered" {
   value = "${data.ignition_file.su.rendered}"
 }
 
-output "cis_systemauth_file_id" {
+output "ign_systemauth_file_id" {
   value = "${data.ignition_file.systemauth.id}"
 }
 
-output "cis_systemauth_file_rendered" {
+output "ign_systemauth_file_rendered" {
   value = "${data.ignition_file.systemauth.rendered}"
 }
 
-output "cis_hardner_file_id" {
+output "ign_hardner_file_id" {
   value = "${data.ignition_file.hardner.id}"
 }
 
-output "cis_hardner_file_rendered" {
+output "ign_hardner_file_rendered" {
   value = "${data.ignition_file.hardner.rendered}"
 }
 

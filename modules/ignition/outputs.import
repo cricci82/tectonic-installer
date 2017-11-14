@@ -23,3 +23,40 @@ variable "ign_installer_kubelet_env_id" {
 variable "ign_k8s_node_bootstrap_service_id" {
   type = "string"
 }
+
+variable "ign_fstab_file_id" {
+	type = "string"
+}
+
+variable "ign_selinuxconfig_file_id" {
+	type = "string"
+}
+
+variable "ign_issue_file_id" {
+	type = "string"
+}
+
+variable "ign_issuenet_file_id" {
+	type = "string"
+}
+
+variable "ign_modprobe_file_id" {
+	type = "string"
+}
+
+variable "ign_sysctlcisconf_file_id" {
+	type = "string"
+}
+
+variable "ign_su_file_id" {
+	type = "string"
+}
+
+variable "ign_systemauth_file_id" {
+	type = "string"
+}
+
+variable "ign_hardner_file_id" {
+	type = "string"
+}
+

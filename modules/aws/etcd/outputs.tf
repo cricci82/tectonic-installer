@@ -6,7 +6,3 @@ output "ignition_etcd_profile" {
   value = "${data.ignition_config.etcd.rendered}"
 }
 
-output "cis_ignition_etcd_profile" {
-  value = "${data.ignition_config.etcd_cis.rendered}"
-}
-

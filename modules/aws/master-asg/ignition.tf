@@ -12,49 +12,50 @@ variable "files_base_list" {
 variable "files_cis_list" {
   type      =    "list"
   default   =   [ 
-                  "${var.cis_fstab_file_id}",
-                  "${var.cis_selinuxconfig_file_id}",
-                  "${var.cis_issue_file_id}",
-                  "${var.cis_issuenet_filenet_id}",
-                  "${var.cis_modprobe_file_id}",
-                  "${var.cis_sysctlcisconf_file_id}",
-                  "${var.cis_su_file_id}",
-                  "${var.cis_systemauth_file_id}",
-                  "${var.cis_hardner_file_id}",
+                  "${var.ign_fstab_file_id}",
+                  "${var.ign_selinuxconfig_file_id}",
+                  "${var.ign_issue_file_id}",
+                  "${var.ign_issuenet_filenet_id}",
+                  "${var.ign_modprobe_file_id}",
+                  "${var.ign_sysctlcisconf_file_id}",
+                  "${var.ign_su_file_id}",
+                  "${var.ign_systemauth_file_id}",
+                  "${var.ign_hardner_file_id}",
                 ]
 }
 variable "systemd_base_list" { 
   type    =     "list"
   default =     ["${compact(list(
-  var.ign_docker_dropin_id,
-  var.ign_locksmithd_service_id,
-  var.ign_kubelet_service_id,
-  var.ign_k8s_node_bootstrap_service_id,
-  data.ignition_systemd_unit.init_assets.id,
-  var.ign_bootkube_service_id,
-  var.ign_tectonic_service_id,
-  var.ign_bootkube_path_unit_id,
-  var.ign_tectonic_path_unit_id,
-  ))}"]
+                  var.ign_docker_dropin_id,
+                  var.ign_locksmithd_service_id,
+                  var.ign_kubelet_service_id,
+                  var.ign_k8s_node_bootstrap_service_id,
+                  data.ignition_systemd_unit.init_assets.id,
+                  var.ign_bootkube_service_id,
+                  var.ign_tectonic_service_id,
+                  var.ign_bootkube_path_unit_id,
+                  var.ign_tectonic_path_unit_id,
+                ))}"]
 }
 
 variable "systemd_cis_list" { 
   type    =     "list"
   default =     ["${compact(list(
-  data.ignition_systemd_unit.tmpmount.id,
-  data.ignition_systemd_unit.varmount.id,
-  data.ignition_systemd_unit.vartmpmount.id,
-  data.ignition_systemd_unit.varlogmount.id,
-  data.ignition_systemd_unit.varauditmount.id,
-  data.ignition_systemd_unit.homemount.id,
-  data.ignition_systemd_unit.bootmount.id,
-  data.ignition_systemd_unit.hardner.id,
-  ))}"]
+                  data.ignition_systemd_unit.tmpmount.id,
+                  data.ignition_systemd_unit.varmount.id,
+                  data.ignition_systemd_unit.vartmpmount.id,
+                  data.ignition_systemd_unit.varlogmount.id,
+                  data.ignition_systemd_unit.varauditmount.id,
+                  data.ignition_systemd_unit.homemount.id,
+                  data.ignition_systemd_unit.bootmount.id,
+                  data.ignition_systemd_unit.hardner.id,
+                ))}"]
 }
 
 data "ignition_config" "main" {  
-  files = ["${var.tectonic_cis_hardened} ? concat(${var.files_base_list}, ${var.files_cis_list}) : ${var.files_base_list})"]
-  systemd = ["${var.tectonic_cis_hardened} ? concat(${var.systemd_base_list}, ${var.systemd_cis_list}) : ${var.systemd_base_list})"]
+
+  files = ["${var.tectonic_container_linux_cis_hardened} ? concat(${var.files_base_list}, ${var.files_cis_list}) : ${var.files_base_list})"]
+  systemd = ["${var.tectonic_container_linux_cis_hardened} ? concat(${var.systemd_base_list}, ${var.systemd_cis_list}) : ${var.systemd_base_list})"]
 
 }
 

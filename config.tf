@@ -494,7 +494,7 @@ variable "tectonic_bootstrap_upgrade_cl" {
   description = "(internal) Whether to trigger a ContainerLinux upgrade on node bootstrap."
 }
 
-variable "tectonic_container_linux_cis_hardned" {
+variable "tectonic_container_linux_cis_hardened" {
   default        = false
     description = <<EOF
 Specifies whether to provision container linux instances that are conformant with CIS Benchmarks.
