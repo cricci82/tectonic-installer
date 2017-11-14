@@ -495,8 +495,9 @@ variable "tectonic_bootstrap_upgrade_cl" {
 }
 
 variable "tectonic_container_linux_cis_hardened" {
-  default        = false
-    description = <<EOF
+  default = false
+
+  description = <<EOF
 Specifies whether to provision container linux instances that are conformant with CIS Benchmarks.
 EOF
 }

@@ -162,70 +162,78 @@ data "ignition_systemd_unit" "coreos_metadata" {
 # CIS Benchmark
 
 data "ignition_disk" "sda" {
-    device = "/dev/sda"
-    wipe_table = true
-    partition {
-        # 1.1.6 Ensure separate partition exists for /var
-          label = "VAR"
-          number = 1
-          size = 4
-    }
-    partition {
-          label = "LOG"
-          number = 2
-          size = 4      
-    } 
-    partition {
-        # 1.1.6 Ensure separate partition exists for /var
-          label = "AUDIT"
-          number = 3
-          size = 4
-    }
-    partition {
-          label = "HOME"
-          number = 4
-          size = 4      
-    } 
+  device     = "/dev/sda"
+  wipe_table = true
+
+  partition {
+    # 1.1.6 Ensure separate partition exists for /var
+    label  = "VAR"
+    number = 1
+    size   = 4
+  }
+
+  partition {
+    label  = "LOG"
+    number = 2
+    size   = 4
+  }
+
+  partition {
+    # 1.1.6 Ensure separate partition exists for /var
+    label  = "AUDIT"
+    number = 3
+    size   = 4
+  }
+
+  partition {
+    label  = "HOME"
+    number = 4
+    size   = 4
+  }
 }
 
 data "ignition_filesystem" "var" {
-    name = "var"
-    mount {
-        device = "/dev/disk/by-partlabel/VAR"
-        format = "ext4"
-        create = true
-        options = ["-L", "VAR"]
-    }
+  name = "var"
+
+  mount {
+    device  = "/dev/disk/by-partlabel/VAR"
+    format  = "ext4"
+    create  = true
+    options = ["-L", "VAR"]
+  }
 }
 
 data "ignition_filesystem" "log" {
-    name = "log"
-    mount {
-        device = "/dev/disk/by-partlabel/LOG"
-        format = "ext4"
-        create = true
-        options = ["-L", "LOG"]
-    }
+  name = "log"
+
+  mount {
+    device  = "/dev/disk/by-partlabel/LOG"
+    format  = "ext4"
+    create  = true
+    options = ["-L", "LOG"]
+  }
 }
 
 data "ignition_filesystem" "audit" {
-    name = "audit"
-    mount {
-        device = "/dev/disk/by-partlabel/AUDIT"
-        format = "ext4"
-        create = true
-        options = ["-L", "AUDIT"]
-    }
+  name = "audit"
+
+  mount {
+    device  = "/dev/disk/by-partlabel/AUDIT"
+    format  = "ext4"
+    create  = true
+    options = ["-L", "AUDIT"]
+  }
 }
 
 data "ignition_filesystem" "home" {
-    name = "home"
-    mount {
-        device = "/dev/disk/by-partlabel/HOME"
-        format = "ext4"
-        create = true
-        options = ["-L", "HOME"]
-    }
+  name = "home"
+
+  mount {
+    device  = "/dev/disk/by-partlabel/HOME"
+    format  = "ext4"
+    create  = true
+    options = ["-L", "HOME"]
+  }
 }
 
 data "template_file" "fstab" {
@@ -262,6 +270,7 @@ data "ignition_file" "issue" {
   filesystem = "root"
   path       = "/etc/issue"
   mode       = 0644
+
   content {
     content = "${data.template_file.issue.rendered}"
   }
@@ -275,6 +284,7 @@ data "ignition_file" "issuenet" {
   filesystem = "root"
   path       = "/etc/issue.net"
   mode       = 0644
+
   content {
     content = "${data.template_file.issuenet.rendered}"
   }
@@ -288,6 +298,7 @@ data "ignition_file" "modprobecisconf" {
   filesystem = "root"
   path       = "/etc/modprobe.d/cis.conf"
   mode       = 0600
+
   content {
     content = "${data.template_file.modprobecisconf.rendered}"
   }
@@ -301,6 +312,7 @@ data "ignition_file" "sysctlcisconf" {
   filesystem = "root"
   path       = "/etc/sysctl.d/cis.conf"
   mode       = 0600
+
   content {
     content = "${data.template_file.sysctlcisconf.rendered}"
   }
@@ -314,6 +326,7 @@ data "ignition_file" "su" {
   filesystem = "root"
   path       = "/etc/pam.d/su"
   mode       = 0644
+
   content {
     content = "${data.template_file.su.rendered}"
   }
@@ -327,21 +340,23 @@ data "ignition_file" "systemauth" {
   filesystem = "root"
   path       = "/etc/pam.d/system-auth"
   mode       = 0644
+
   content {
     content = "${data.template_file.systemauth.rendered}"
   }
 }
 
-data "template_file" "hardner" {
-  template = "${file("${path.module}/resources/root/hardner.sh")}"
+data "template_file" "hardener" {
+  template = "${file("${path.module}/resources/root/hardener.sh")}"
 }
 
-data "ignition_file" "hardner" {
+data "ignition_file" "hardener" {
   filesystem = "root"
   path       = "/root/hardener.sh"
   mode       = 0700
+
   content {
-    content = "${data.template_file.hardner.rendered}"
+    content = "${data.template_file.hardener.rendered}"
   }
 }
 
@@ -472,8 +487,8 @@ EOF
   ]
 }
 
-data "ignition_systemd_unit" "hardner" {
-  name   = "hardner.service"
+data "ignition_systemd_unit" "hardener" {
+  name   = "hardener.service"
   enable = true
 
   content = <<EOF
@@ -489,5 +504,3 @@ ExecStart=/root/hardener.sh
 WantedBy=multi-user.target
 EOF
 }
-
-

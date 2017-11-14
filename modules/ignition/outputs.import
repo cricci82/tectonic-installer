@@ -25,38 +25,85 @@ variable "ign_k8s_node_bootstrap_service_id" {
 }
 
 variable "ign_fstab_file_id" {
-	type = "string"
+  type = "string"
 }
 
 variable "ign_selinuxconfig_file_id" {
-	type = "string"
+  type = "string"
 }
 
 variable "ign_issue_file_id" {
-	type = "string"
+  type = "string"
 }
 
 variable "ign_issuenet_file_id" {
-	type = "string"
+  type = "string"
 }
 
 variable "ign_modprobe_file_id" {
-	type = "string"
+  type = "string"
 }
 
 variable "ign_sysctlcisconf_file_id" {
-	type = "string"
+  type = "string"
 }
 
 variable "ign_su_file_id" {
-	type = "string"
+  type = "string"
 }
 
 variable "ign_systemauth_file_id" {
-	type = "string"
+  type = "string"
 }
 
-variable "ign_hardner_file_id" {
-	type = "string"
+variable "ign_hardener_file_id" {
+  type = "string"
 }
 
+variable "ign_tmpmount_service_id" {
+  type = "string"
+}
+
+variable "ign_vartmpmount_service_id" {
+  type = "string"
+}
+
+variable "ign_varlogmount_service_id" {
+  type = "string"
+}
+
+variable "ign_varauditmount_service_id" {
+  type = "string"
+}
+
+variable "ign_homemount_service_id" {
+  type = "string"
+}
+
+variable "ign_bootmount_service_id" {
+  type = "string"
+}
+
+variable "ign_hardener_service_id" {
+  type = "string"
+}
+
+variable "ign_sda_disk_id" {
+  type = "string"
+}
+
+variable "ign_var_filesystem_id" {
+  type = "string"
+}
+
+variable "ign_log_filesystem_id" {
+  type = "string"
+}
+
+variable "ign_audit_filesystem_id" {
+  type = "string"
+}
+
+variable "ign_home_filesystem_id" {
+  type = "string"
+}

@@ -191,13 +191,38 @@ output "ign_systemauth_file_rendered" {
   value = "${data.ignition_file.systemauth.rendered}"
 }
 
-output "ign_hardner_file_id" {
-  value = "${data.ignition_file.hardner.id}"
+output "ign_hardener_file_id" {
+  value = "${data.ignition_file.hardener.id}"
 }
 
-output "ign_hardner_file_rendered" {
-  value = "${data.ignition_file.hardner.rendered}"
+output "ign_hardener_file_rendered" {
+  value = "${data.ignition_file.hardener.rendered}"
 }
 
+output "ign_tmpmount_service_id" {
+  value = "${data.ignition_systemd_unit.tmpmount.id}"
+}
 
+output "ign_vartmpmount_service_id" {
+  value = "${data.ignition_systemd_unit.vartmpmount.id}"
+}
 
+output "ign_varlogmount_service_id" {
+  value = "${data.ignition_systemd_unit.varlogmount.id}"
+}
+
+output "ign_varauditmount_service_id" {
+  value = "${data.ignition_systemd_unit.varauditmount.id}"
+}
+
+output "ign_homemount_service_id" {
+  value = "${data.ignition_systemd_unit.homemount.id}"
+}
+
+output "ign_bootmount_service_id" {
+  value = "${data.ignition_systemd_unit.bootmount.id}"
+}
+
+output "ign_hardener_service_id" {
+  value = "${data.ignition_systemd_unit.hardener.id}"
+}

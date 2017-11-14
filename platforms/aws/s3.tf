@@ -55,4 +55,3 @@ resource "aws_s3_bucket_object" "kubeconfig" {
       "tectonicClusterID", "${module.tectonic.cluster_id}"
     ), var.tectonic_aws_extra_tags)}"
 }
-

@@ -5,4 +5,3 @@ output "ip_addresses" {
 output "ignition_etcd_profile" {
   value = "${data.ignition_config.etcd.rendered}"
 }
-
