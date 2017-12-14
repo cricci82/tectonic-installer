@@ -162,7 +162,7 @@ data "ignition_systemd_unit" "coreos_metadata" {
 # CIS Benchmark
 
 data "ignition_disk" "sda" {
-  device     = "/dev/sda"
+  device     = "/dev/xvda"
   wipe_table = true
 
   partition {
@@ -190,6 +190,7 @@ data "ignition_disk" "sda" {
     number = 4
     size   = 4
   }
+ 
 }
 
 data "ignition_filesystem" "var" {
