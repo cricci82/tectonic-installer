@@ -110,6 +110,14 @@ module "ignition_masters" {
   tectonic_vanilla_k8s      = "${var.tectonic_vanilla_k8s}"
 }
 
+module "ignition_main_masters" {
+  source = "../../modules/aws/ignition_main"
+
+  # source_url = "s3://s3.${var.tectonic_aws_region}.amazonaws.com/${aws_s3_bucket.tectonic.id}/${aws_s3_bucket_object.ignition_master.key}"
+  source_url = "s3://${aws_s3_bucket_object.ignition_master.bucket}/${aws_s3_bucket_object.ignition_master.key}"
+  verification = "sha512-${sha512("${aws_s3_bucket_object.ignition_master.content}")}"
+}
+
 module "masters" {
   source = "../../modules/aws/master-asg"
 
@@ -145,6 +153,15 @@ module "masters" {
   root_volume_type                  = "${var.tectonic_aws_master_root_volume_type}"
   ssh_key                           = "${var.tectonic_aws_ssh_key}"
   subnet_ids                        = "${module.vpc.master_subnet_ids}"
+  ignition_main                     = "${module.ignition_main_masters.ignition}"
+}
+
+module "ignition_main_workers" {
+  source = "../../modules/aws/ignition_main"
+
+  # source_url = "s3://${aws_s3_bucket.tectonic.id}.s3.amazonaws.com/${aws_s3_bucket_object.ignition_worker.key}"
+  source_url = "s3://${aws_s3_bucket_object.ignition_worker.bucket}/${aws_s3_bucket_object.ignition_worker.key}"
+  verification = "sha512-${sha512("${aws_s3_bucket_object.ignition_worker.content}")}"
 }
 
 module "ignition_workers" {
@@ -190,6 +207,7 @@ module "workers" {
   ign_locksmithd_service_id         = "${module.ignition_masters.locksmithd_service_id}"
   ign_max_user_watches_id           = "${module.ignition_workers.max_user_watches_id}"
   ign_s3_puller_id                  = "${module.ignition_workers.s3_puller_id}"
+  ignition_main                     = "${module.ignition_main_workers.ignition}"
 }
 
 module "dns" {

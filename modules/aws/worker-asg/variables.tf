@@ -82,3 +82,7 @@ variable "worker_iam_role" {
 variable "ign_s3_puller_id" {
   type = "string"
 }
+
+variable "ignition_main" {
+  type = "string"
+}
