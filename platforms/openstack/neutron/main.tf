@@ -1,5 +1,5 @@
 provider "openstack" {
-  version = "0.3.0"
+  version = "1.0.0"
 }
 
 data "template_file" "etcd_hostname_list" {
@@ -15,6 +15,7 @@ module "kube_certs" {
   ca_key_pem         = "${var.tectonic_ca_key}"
   kube_apiserver_url = "https://${var.tectonic_cluster_name}-k8s.${var.tectonic_base_domain}:443"
   service_cidr       = "${var.tectonic_service_cidr}"
+  validity_period    = "${var.tectonic_tls_validity_period}"
 }
 
 module "etcd_certs" {
@@ -31,18 +32,20 @@ module "etcd_certs" {
 module "ingress_certs" {
   source = "../../../modules/tls/ingress/self-signed"
 
-  base_address = "${var.tectonic_cluster_name}.${var.tectonic_base_domain}"
-  ca_cert_pem  = "${module.kube_certs.ca_cert_pem}"
-  ca_key_alg   = "${module.kube_certs.ca_key_alg}"
-  ca_key_pem   = "${module.kube_certs.ca_key_pem}"
+  base_address    = "${var.tectonic_cluster_name}.${var.tectonic_base_domain}"
+  ca_cert_pem     = "${module.kube_certs.ca_cert_pem}"
+  ca_key_alg      = "${module.kube_certs.ca_key_alg}"
+  ca_key_pem      = "${module.kube_certs.ca_key_pem}"
+  validity_period = "${var.tectonic_tls_validity_period}"
 }
 
 module "identity_certs" {
   source = "../../../modules/tls/identity/self-signed"
 
-  ca_cert_pem = "${module.kube_certs.ca_cert_pem}"
-  ca_key_alg  = "${module.kube_certs.ca_key_alg}"
-  ca_key_pem  = "${module.kube_certs.ca_key_pem}"
+  ca_cert_pem     = "${module.kube_certs.ca_cert_pem}"
+  ca_key_alg      = "${module.kube_certs.ca_key_alg}"
+  ca_key_pem      = "${module.kube_certs.ca_key_pem}"
+  validity_period = "${var.tectonic_tls_validity_period}"
 }
 
 module "bootkube" {
@@ -149,25 +152,22 @@ search ${var.tectonic_base_domain}
 ${join("\n", formatlist("nameserver %s", var.tectonic_openstack_dns_nameservers))}
 EOF
 
-  base_domain      = "${var.tectonic_base_domain}"
-  cluster_name     = "${var.tectonic_cluster_name}"
-  container_image  = "${var.tectonic_container_images["etcd"]}"
-  core_public_keys = ["${module.secrets.core_public_key_openssh}"]
-  self_hosted_etcd = "${var.tectonic_self_hosted_etcd}"
-  tls_enabled      = "${var.tectonic_etcd_tls_enabled}"
-
-  tls_ca_crt_pem     = "${module.etcd_certs.etcd_ca_crt_pem}"
-  tls_server_crt_pem = "${module.etcd_certs.etcd_server_crt_pem}"
-  tls_server_key_pem = "${module.etcd_certs.etcd_server_key_pem}"
-  tls_client_crt_pem = "${module.etcd_certs.etcd_client_crt_pem}"
-  tls_client_key_pem = "${module.etcd_certs.etcd_client_key_pem}"
-  tls_peer_crt_pem   = "${module.etcd_certs.etcd_peer_crt_pem}"
-  tls_peer_key_pem   = "${module.etcd_certs.etcd_peer_key_pem}"
-
-  instance_count = "${var.tectonic_etcd_count}"
-
-  ign_etcd_dropin_id_list       = "${module.ignition_masters.etcd_dropin_id_list}"
+  base_domain                   = "${var.tectonic_base_domain}"
+  cluster_name                  = "${var.tectonic_cluster_name}"
+  container_image               = "${var.tectonic_container_images["etcd"]}"
+  core_public_keys              = ["${module.secrets.core_public_key_openssh}"]
   ign_coreos_metadata_dropin_id = "${module.ignition_masters.coreos_metadata_dropin_id}"
+  ign_etcd_dropin_id_list       = "${module.ignition_masters.etcd_dropin_id_list}"
+  instance_count                = "${var.tectonic_etcd_count}"
+  self_hosted_etcd              = "${var.tectonic_self_hosted_etcd}"
+  tls_ca_crt_pem                = "${module.etcd_certs.etcd_ca_crt_pem}"
+  tls_client_crt_pem            = "${module.etcd_certs.etcd_client_crt_pem}"
+  tls_client_key_pem            = "${module.etcd_certs.etcd_client_key_pem}"
+  tls_enabled                   = "${var.tectonic_etcd_tls_enabled}"
+  tls_peer_crt_pem              = "${module.etcd_certs.etcd_peer_crt_pem}"
+  tls_peer_key_pem              = "${module.etcd_certs.etcd_peer_key_pem}"
+  tls_server_crt_pem            = "${module.etcd_certs.etcd_server_crt_pem}"
+  tls_server_key_pem            = "${module.etcd_certs.etcd_server_key_pem}"
 }
 
 module "ignition_masters" {
@@ -184,6 +184,7 @@ module "ignition_masters" {
   image_re                  = "${var.tectonic_image_re}"
   kube_dns_service_ip       = "${module.bootkube.kube_dns_service_ip}"
   kubelet_cni_bin_dir       = "${var.tectonic_networking == "calico" || var.tectonic_networking == "canal" ? "/var/lib/cni/bin" : "" }"
+  kubelet_debug_config      = "${var.tectonic_kubelet_debug_config}"
   kubelet_node_label        = "node-role.kubernetes.io/master"
   kubelet_node_taints       = "node-role.kubernetes.io/master=:NoSchedule"
   metadata_provider         = "openstack-metadata"
@@ -198,22 +199,22 @@ search ${var.tectonic_base_domain}
 ${join("\n", formatlist("nameserver %s", var.tectonic_openstack_dns_nameservers))}
 EOF
 
-  cluster_name       = "${var.tectonic_cluster_name}"
-  core_public_keys   = ["${module.secrets.core_public_key_openssh}"]
-  hostname_infix     = "master"
-  instance_count     = "${var.tectonic_master_count}"
-  kubeconfig_content = "${module.bootkube.kubeconfig}"
-
+  cluster_name                      = "${var.tectonic_cluster_name}"
+  core_public_keys                  = ["${module.secrets.core_public_key_openssh}"]
+  hostname_infix                    = "master"
   ign_bootkube_path_unit_id         = "${module.bootkube.systemd_path_unit_id}"
   ign_bootkube_service_id           = "${module.bootkube.systemd_service_id}"
   ign_docker_dropin_id              = "${module.ignition_masters.docker_dropin_id}"
   ign_installer_kubelet_env_id      = "${module.ignition_masters.installer_kubelet_env_id}"
+  ign_installer_runtime_mappings_id = "${module.ignition_masters.installer_runtime_mappings_id}"
   ign_k8s_node_bootstrap_service_id = "${module.ignition_masters.k8s_node_bootstrap_service_id}"
   ign_kubelet_service_id            = "${module.ignition_masters.kubelet_service_id}"
   ign_locksmithd_service_id         = "${module.ignition_masters.locksmithd_service_id}"
   ign_max_user_watches_id           = "${module.ignition_masters.max_user_watches_id}"
   ign_tectonic_path_unit_id         = "${var.tectonic_vanilla_k8s ? "" : module.tectonic.systemd_path_unit_id}"
   ign_tectonic_service_id           = "${module.tectonic.systemd_service_id}"
+  instance_count                    = "${var.tectonic_master_count}"
+  kubeconfig_content                = "${module.bootkube.kubeconfig}"
 }
 
 module "ignition_workers" {
@@ -224,6 +225,7 @@ module "ignition_workers" {
   image_re             = "${var.tectonic_image_re}"
   kube_dns_service_ip  = "${module.bootkube.kube_dns_service_ip}"
   kubelet_cni_bin_dir  = "${var.tectonic_networking == "calico" || var.tectonic_networking == "canal" ? "/var/lib/cni/bin" : "" }"
+  kubelet_debug_config = "${var.tectonic_kubelet_debug_config}"
   kubelet_node_label   = "node-role.kubernetes.io/node"
   kubelet_node_taints  = ""
   tectonic_vanilla_k8s = "${var.tectonic_vanilla_k8s}"
@@ -237,18 +239,18 @@ search ${var.tectonic_base_domain}
 ${join("\n", formatlist("nameserver %s", var.tectonic_openstack_dns_nameservers))}
 EOF
 
-  cluster_name       = "${var.tectonic_cluster_name}"
-  core_public_keys   = ["${module.secrets.core_public_key_openssh}"]
-  hostname_infix     = "worker"
-  instance_count     = "${var.tectonic_worker_count}"
-  kubeconfig_content = "${module.bootkube.kubeconfig}"
-
+  cluster_name                      = "${var.tectonic_cluster_name}"
+  core_public_keys                  = ["${module.secrets.core_public_key_openssh}"]
+  hostname_infix                    = "worker"
   ign_docker_dropin_id              = "${module.ignition_workers.docker_dropin_id}"
   ign_installer_kubelet_env_id      = "${module.ignition_workers.installer_kubelet_env_id}"
+  ign_installer_runtime_mappings_id = "${module.ignition_workers.installer_runtime_mappings_id}"
   ign_k8s_node_bootstrap_service_id = "${module.ignition_workers.k8s_node_bootstrap_service_id}"
   ign_kubelet_service_id            = "${module.ignition_workers.kubelet_service_id}"
   ign_locksmithd_service_id         = "${module.ignition_workers.locksmithd_service_id}"
   ign_max_user_watches_id           = "${module.ignition_workers.max_user_watches_id}"
+  instance_count                    = "${var.tectonic_worker_count}"
+  kubeconfig_content                = "${module.bootkube.kubeconfig}"
 }
 
 module "secrets" {
@@ -266,27 +268,24 @@ module "secgroups" {
 module "dns" {
   source = "../../../modules/dns/designate"
 
-  cluster_name = "${var.tectonic_cluster_name}"
-  base_domain  = "${var.tectonic_base_domain}"
-
-  admin_email               = "${var.tectonic_admin_email}"
-  api_ips                   = "${openstack_networking_floatingip_v2.loadbalancer.*.address}"
+  api_ip_addresses          = "${openstack_networking_floatingip_v2.loadbalancer.*.address}"
+  base_domain               = "${var.tectonic_base_domain}"
+  cluster_name              = "${var.tectonic_cluster_name}"
   etcd_count                = "${var.tectonic_self_hosted_etcd != "" ? 0 : var.tectonic_etcd_count}"
-  etcd_ips                  = "${flatten(openstack_networking_port_v2.etcd.*.all_fixed_ips)}"
+  etcd_ip_addresses         = "${flatten(openstack_networking_port_v2.etcd.*.all_fixed_ips)}"
   etcd_tls_enabled          = "${var.tectonic_etcd_tls_enabled}"
   master_count              = "${var.tectonic_master_count}"
-  master_ips                = "${flatten(openstack_networking_port_v2.master.*.all_fixed_ips)}"
+  master_ip_addresses       = "${flatten(openstack_networking_port_v2.master.*.all_fixed_ips)}"
+  self_hosted_etcd          = "${var.tectonic_self_hosted_etcd}"
+  tectonic_vanilla_k8s      = "${var.tectonic_vanilla_k8s}"
   worker_count              = "${var.tectonic_worker_count}"
-  worker_ips                = "${flatten(openstack_networking_port_v2.worker.*.all_fixed_ips)}"
+  worker_ip_addresses       = "${flatten(openstack_networking_port_v2.worker.*.all_fixed_ips)}"
   worker_public_ips         = "${openstack_networking_floatingip_v2.worker.*.address}"
   worker_public_ips_enabled = "${var.tectonic_openstack_disable_floatingip ? false : true}"
-
-  self_hosted_etcd     = "${var.tectonic_self_hosted_etcd}"
-  tectonic_vanilla_k8s = "${var.tectonic_vanilla_k8s}"
 }
 
-module "flannel-vxlan" {
-  source = "../../../modules/net/flannel-vxlan"
+module "flannel_vxlan" {
+  source = "../../../modules/net/flannel_vxlan"
 
   cluster_cidr     = "${var.tectonic_cluster_cidr}"
   enabled          = "${var.tectonic_networking == "flannel"}"

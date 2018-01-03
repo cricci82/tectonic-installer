@@ -10,6 +10,11 @@ creds = [
   file(credentialsId: 'tectonic-license', variable: 'TF_VAR_tectonic_license_path'),
   file(credentialsId: 'tectonic-pull', variable: 'TF_VAR_tectonic_pull_secret_path'),
   file(credentialsId: 'GCP-APPLICATION', variable: 'GOOGLE_APPLICATION_CREDENTIALS'),
+  usernamePassword(
+    credentialsId: 'jenkins-log-analyzer-user',
+    passwordVariable: 'LOG_ANALYZER_PASSWORD',
+    usernameVariable: 'LOG_ANALYZER_USER'
+  ),
   [
     $class: 'AmazonWebServicesCredentialsBinding',
     credentialsId: 'tectonic-jenkins-installer'
@@ -29,7 +34,7 @@ creds = [
   ]
 ]
 
-quay_creds = [
+quayCreds = [
   usernamePassword(
     credentialsId: 'quay-robot',
     passwordVariable: 'QUAY_ROBOT_SECRET',
@@ -37,24 +42,26 @@ quay_creds = [
   )
 ]
 
-default_builder_image = 'quay.io/coreos/tectonic-builder:v1.41'
-tectonic_smoke_test_env_image = 'quay.io/coreos/tectonic-smoke-test-env:v5.8'
+defaultBuilderImage = 'quay.io/coreos/tectonic-builder:v1.41'
+tectonicSmokeTestEnvImage = 'quay.io/coreos/tectonic-smoke-test-env:v5.9'
+originalCommitId = 'UNKNOWN'
 
 pipeline {
   agent none
   environment {
-    KUBE_CONFORMANCE_IMAGE = 'quay.io/coreos/kube-conformance:v1.7.5_coreos.0_golang1.9.1'
+    KUBE_CONFORMANCE_IMAGE = 'quay.io/coreos/kube-conformance:v1.8.2_coreos.0'
+    LOGSTASH_BUCKET = 'log-analyzer-tectonic-installer'
   }
   options {
-    // Individual steps have stricter timeouts. 300 minutes should be never reached.
-    timeout(time:5, unit:'HOURS')
+    // Individual steps have stricter timeouts. 360 minutes should be never reached.
+    timeout(time:6, unit:'HOURS')
     timestamps()
-    buildDiscarder(logRotator(numToKeepStr:'100'))
+    buildDiscarder(logRotator(numToKeepStr:'20', artifactNumToKeepStr: '20'))
   }
   parameters {
     string(
       name: 'builder_image',
-      defaultValue: default_builder_image,
+      defaultValue: defaultBuilderImage,
       description: 'tectonic-builder docker image to use for builds'
     )
     string(
@@ -112,10 +119,11 @@ pipeline {
             try {
               timeout(time: 10, unit: 'MINUTES') {
                 forcefullyCleanWorkspace()
-                // First run `checkout scm` and then `printLogstashAttributes`
-                // as `printLogstashAttributes` accesses scm related variables
-                // like `env.CHANGE_ID`.
                 checkout scm
+                stash name: 'clean-repo', excludes: 'installer/vendor/**,tests/smoke/vendor/**,images/tectonic-stats-extender/vendor/**'
+                originalCommitId = sh(returnStdout: true, script: 'git rev-parse origin/"\${BRANCH_NAME}"')
+                echo "originalCommitId: ${originalCommitId}"
+
                 printLogstashAttributes()
                 withDockerContainer(params.builder_image) {
                   ansiColor('xterm') {
@@ -141,7 +149,7 @@ pipeline {
                     stash name: 'smoke-test-binary', includes: 'bin/smoke'
                   }
                 }
-                withDockerContainer(tectonic_smoke_test_env_image) {
+                withDockerContainer(tectonicSmokeTestEnvImage) {
                   sh"""#!/bin/bash -ex
                     cd tests/rspec
                     bundler exec rubocop --cache false spec lib
@@ -152,7 +160,7 @@ pipeline {
               err = error
               throw error
             } finally {
-              reportStatusToGithub((err == null) ? 'success' : 'failure', 'basic-tests')
+              reportStatusToGithub((err == null) ? 'success' : 'failure', 'basic-tests', originalCommitId)
               cleanWs notFailBuild: true
             }
           }
@@ -183,7 +191,7 @@ pipeline {
                     withCredentials(creds) {
                       withDockerContainer(params.builder_image) {
                         ansiColor('xterm') {
-                          checkout scm
+                          unstash 'clean-repo'
                           unstash 'installer-binary'
                           unstash 'node-modules'
                           sh """#!/bin/bash -ex
@@ -205,7 +213,7 @@ pipeline {
                     withCredentials(creds) {
                       withDockerContainer(image: params.builder_image, args: '-u root') {
                         ansiColor('xterm') {
-                          checkout scm
+                          unstash 'clean-repo'
                           unstash 'installer-binary'
                           unstash 'node-modules'
                           script {
@@ -239,8 +247,8 @@ pipeline {
             throw error
           } finally {
             node('worker && ec2') {
-              checkout scm
-              reportStatusToGithub((err == null) ? 'success' : 'failure', 'gui-tests')
+              unstash 'clean-repo'
+              reportStatusToGithub((err == null) ? 'success' : 'failure', 'gui-tests', originalCommitId)
             }
           }
         }
@@ -257,6 +265,7 @@ pipeline {
         TECTONIC_INSTALLER_ROLE = 'tectonic-installer'
         GRAFITI_DELETER_ROLE = 'grafiti-deleter'
         TF_VAR_tectonic_container_images = "${params.hyperkube_image}"
+        TF_VAR_tectonic_kubelet_debug_config = "--minimum-container-ttl-duration=8h --maximum-dead-containers-per-container=9999 --maximum-dead-containers=9999"
         GOOGLE_PROJECT = "tectonic-installer"
       }
       steps {
@@ -315,7 +324,7 @@ pipeline {
                 try {
                   timeout(time: 4, unit: 'HOURS') {
                     ansiColor('xterm') {
-                      checkout scm
+                      unstash 'clean-repo'
                       unstash 'smoke-test-binary'
                       withCredentials(creds) {
                         sh """#!/bin/bash -ex
@@ -335,7 +344,8 @@ pipeline {
                   err = error
                   throw error
                 } finally {
-                  reportStatusToGithub((err == null) ? 'success' : 'failure', specFile)
+                  reportStatusToGithub((err == null) ? 'success' : 'failure', specFile, originalCommitId)
+                  archiveArtifacts allowEmptyArchive: true, artifacts: 'tests/rspec/logs/**/*.log'
                   cleanWs notFailBuild: true
                 }
               }
@@ -353,9 +363,9 @@ pipeline {
       steps {
         node('worker && ec2') {
           forcefullyCleanWorkspace()
-          withCredentials(quay_creds) {
+          withCredentials(quayCreds) {
             ansiColor('xterm') {
-              checkout scm
+              unstash 'clean-repo'
               sh """
                 docker build -t quay.io/coreos/tectonic-installer:master -f images/tectonic-installer/Dockerfile .
                 docker login -u="$QUAY_ROBOT_USERNAME" -p="$QUAY_ROBOT_SECRET" quay.io
@@ -368,16 +378,33 @@ pipeline {
         }
       }
     }
+
+  }
+  post {
+    always {
+      node('worker && ec2') {
+        forcefullyCleanWorkspace()
+        echo "Starting with streaming the logfile to the S3 bucket"
+        withDockerContainer(params.builder_image) {
+          withCredentials(creds) {
+            unstash 'clean-repo'
+            sh """#!/bin/bash -xe
+            ./tests/jenkins-jobs/scripts/log-analyzer-copy.sh
+            """
+          }
+        }
+      }
+    }
   }
 }
 
 def forcefullyCleanWorkspace() {
   return withDockerContainer(
-    image: tectonic_smoke_test_env_image,
+    image: tectonicSmokeTestEnvImage,
     args: '-u root'
   ) {
     ansiColor('xterm') {
-      sh """#!/bin/bash -ex
+      sh """#!/bin/bash -e
         if [ -d "\$WORKSPACE" ]
         then
           rm -rfv \$WORKSPACE/*
@@ -392,15 +419,15 @@ def runRSpecTest(testFilePath, dockerArgs) {
     node('worker && ec2') {
       def err = null
       try {
-        timeout(time: 4, unit: 'HOURS') {
+        timeout(time: 5, unit: 'HOURS') {
           forcefullyCleanWorkspace()
           ansiColor('xterm') {
             withCredentials(creds) {
               withDockerContainer(
-                image: tectonic_smoke_test_env_image,
+                image: tectonicSmokeTestEnvImage,
                 args: '-u root -v /var/run/docker.sock:/var/run/docker.sock ' + dockerArgs
               ) {
-                checkout scm
+                unstash 'clean-repo'
                 unstash 'smoke-test-binary'
                 sh """#!/bin/bash -ex
                   cd tests/rspec
@@ -414,7 +441,8 @@ def runRSpecTest(testFilePath, dockerArgs) {
         err = error
         throw error
       } finally {
-        reportStatusToGithub((err == null) ? 'success' : 'failure', testFilePath)
+        reportStatusToGithub((err == null) ? 'success' : 'failure', testFilePath, originalCommitId)
+        archiveArtifacts allowEmptyArchive: true, artifacts: 'tests/rspec/logs/**/*.log'
         cleanWs notFailBuild: true
       }
 
@@ -423,11 +451,10 @@ def runRSpecTest(testFilePath, dockerArgs) {
 }
 
 
-def reportStatusToGithub(status, context) {
+def reportStatusToGithub(status, context, commitId) {
   withCredentials(creds) {
-    checkout scm
     sh """#!/bin/bash -ex
-      ./tests/jenkins-jobs/scripts/report-status-to-github.sh ${status} ${context}
+      ./tests/jenkins-jobs/scripts/report-status-to-github.sh ${status} ${context} ${commitId}
     """
   }
 }

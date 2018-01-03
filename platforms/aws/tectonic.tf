@@ -9,8 +9,9 @@ module "kube_certs" {
   ca_cert_pem        = "${var.tectonic_ca_cert}"
   ca_key_alg         = "${var.tectonic_ca_key_alg}"
   ca_key_pem         = "${var.tectonic_ca_key}"
-  kube_apiserver_url = "https://${module.dns.api_internal_fqdn}:443"
+  kube_apiserver_url = "https://${var.tectonic_aws_private_endpoints ? module.dns.api_internal_fqdn : module.dns.api_external_fqdn}:443"
   service_cidr       = "${var.tectonic_service_cidr}"
+  validity_period    = "${var.tectonic_tls_validity_period}"
 }
 
 module "etcd_certs" {
@@ -27,18 +28,20 @@ module "etcd_certs" {
 module "ingress_certs" {
   source = "../../modules/tls/ingress/self-signed"
 
-  base_address = "${module.dns.ingress_internal_fqdn}"
-  ca_cert_pem  = "${module.kube_certs.ca_cert_pem}"
-  ca_key_alg   = "${module.kube_certs.ca_key_alg}"
-  ca_key_pem   = "${module.kube_certs.ca_key_pem}"
+  base_address    = "${var.tectonic_aws_private_endpoints ? module.dns.ingress_internal_fqdn : module.dns.ingress_external_fqdn}"
+  ca_cert_pem     = "${module.kube_certs.ca_cert_pem}"
+  ca_key_alg      = "${module.kube_certs.ca_key_alg}"
+  ca_key_pem      = "${module.kube_certs.ca_key_pem}"
+  validity_period = "${var.tectonic_tls_validity_period}"
 }
 
 module "identity_certs" {
   source = "../../modules/tls/identity/self-signed"
 
-  ca_cert_pem = "${module.kube_certs.ca_cert_pem}"
-  ca_key_alg  = "${module.kube_certs.ca_key_alg}"
-  ca_key_pem  = "${module.kube_certs.ca_key_pem}"
+  ca_cert_pem     = "${module.kube_certs.ca_cert_pem}"
+  ca_key_alg      = "${module.kube_certs.ca_key_alg}"
+  ca_key_pem      = "${module.kube_certs.ca_key_pem}"
+  validity_period = "${var.tectonic_tls_validity_period}"
 }
 
 module "bootkube" {
@@ -53,6 +56,7 @@ module "bootkube" {
   # Platform-independent variables wiring, do not modify.
   container_images = "${var.tectonic_container_images}"
   versions         = "${var.tectonic_versions}"
+  self_hosted_etcd = "${var.tectonic_self_hosted_etcd}"
 
   service_cidr = "${var.tectonic_service_cidr}"
   cluster_cidr = "${var.tectonic_cluster_cidr}"
@@ -156,7 +160,7 @@ module "tectonic" {
 }
 
 module "flannel_vxlan" {
-  source = "../../modules/net/flannel-vxlan"
+  source = "../../modules/net/flannel_vxlan"
 
   cluster_cidr     = "${var.tectonic_cluster_cidr}"
   enabled          = "${var.tectonic_networking == "flannel"}"

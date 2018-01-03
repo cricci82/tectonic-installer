@@ -15,6 +15,10 @@ resource "aws_s3_bucket" "tectonic" {
       "KubernetesCluster", "${var.tectonic_cluster_name}",
       "tectonicClusterID", "${module.tectonic.cluster_id}"
     ), var.tectonic_aws_extra_tags)}"
+
+  lifecycle {
+    ignore_changes = ["*"]
+  }
 }
 
 # Bootkube / Tectonic assets
@@ -34,6 +38,10 @@ resource "aws_s3_bucket_object" "tectonic_assets" {
       "KubernetesCluster", "${var.tectonic_cluster_name}",
       "tectonicClusterID", "${module.tectonic.cluster_id}"
     ), var.tectonic_aws_extra_tags)}"
+
+  lifecycle {
+    ignore_changes = ["*"]
+  }
 }
 
 # kubeconfig
@@ -61,7 +69,7 @@ resource "aws_s3_bucket_object" "ignition_master" {
   bucket  = "${aws_s3_bucket.tectonic.bucket}"
   key     = "ignition_master.json"
   content = "${module.masters.ignition}"
-  acl     = "authenticated-read"
+  acl     = "private"
 
   # The current Tectonic installer stores bits of the kubeconfig in KMS. As we
   # do not support KMS yet, we at least offload it to S3 for now. Eventually,
@@ -80,7 +88,7 @@ resource "aws_s3_bucket_object" "ignition_worker" {
   bucket  = "${aws_s3_bucket.tectonic.bucket}"
   key     = "ignition_worker.json"
   content = "${module.workers.ignition}"
-  acl     = "authenticated-read"
+  acl     = "private"
 
   # The current Tectonic installer stores bits of the kubeconfig in KMS. As we
   # do not support KMS yet, we at least offload it to S3 for now. Eventually,
@@ -90,6 +98,26 @@ resource "aws_s3_bucket_object" "ignition_worker" {
 
   tags = "${merge(map(
       "Name", "${var.tectonic_cluster_name}-ignition_worker",
+      "KubernetesCluster", "${var.tectonic_cluster_name}",
+      "tectonicClusterID", "${module.tectonic.cluster_id}"
+    ), var.tectonic_aws_extra_tags)}"
+}
+
+resource "aws_s3_bucket_object" "ignition_etcd" {
+  count   = "${length(data.template_file.etcd_hostname_list.*.id)}"
+  bucket  = "${aws_s3_bucket.tectonic.bucket}"
+  key     = "${var.tectonic_cluster_name}-etcd-${count.index}.${var.tectonic_base_domain}.json"
+  content = "${module.etcd.ignition[count.index]}" 
+  acl     = "private"
+
+  # The current Tectonic installer stores bits of the kubeconfig in KMS. As we
+  # do not support KMS yet, we at least offload it to S3 for now. Eventually,
+  # we should consider using KMS-based client-side encryption, or uploading it
+  # to KMS.
+  server_side_encryption = "AES256"
+
+  tags = "${merge(map(
+      "Name", "${var.tectonic_cluster_name}-ignition_etcd",
       "KubernetesCluster", "${var.tectonic_cluster_name}",
       "tectonicClusterID", "${module.tectonic.cluster_id}"
     ), var.tectonic_aws_extra_tags)}"

@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'cluster_support'
 require 'fileutils'
 require 'jenkins'
 require 'kubectl_helpers'
@@ -7,39 +8,47 @@ require 'name_generator'
 require 'password_generator'
 require 'securerandom'
 require 'ssh'
+require 'tfstate_file'
 require 'tfvars_file'
 require 'timeout'
+require 'with_retries'
 
 # Cluster represents a k8s cluster
 class Cluster
   attr_reader :tfvars_file, :kubeconfig, :manifest_path, :build_path,
-              :tectonic_admin_email, :tectonic_admin_password
+              :tectonic_admin_email, :tectonic_admin_password, :tfstate_file
 
   def initialize(tfvars_file)
     @tfvars_file = tfvars_file
 
     # Enable local testers to specify a static cluster name
     # S3 buckets can only handle lower case names
-    @name = ENV['CLUSTER'] || NameGenerator.generate(tfvars_file.prefix)
+    @name = ENV['CLUSTER'] || NameGenerator.generate(@tfvars_file.prefix)
     @tectonic_admin_email = ENV['TF_VAR_tectonic_admin_email'] || NameGenerator.generate_fake_email
     @tectonic_admin_password = ENV['TF_VAR_tectonic_admin_password'] || PasswordGenerator.generate_password
 
     @build_path = File.join(File.realpath('../../'), "build/#{@name}")
     @manifest_path = File.join(@build_path, 'generated')
     @kubeconfig = File.join(manifest_path, 'auth/kubeconfig')
+    @tfstate_file = TFStateFile.new(@build_path)
+
     check_prerequisites
-    localconfig
-    prepare_assets
   end
 
   def plan
-    succeeded = system(env_variables, 'make -C ../.. plan')
-    raise 'Planning cluster failed' unless succeeded
+    3.times do
+      return if system(env_variables, 'make -C ../.. plan')
+    end
+    raise 'Planning cluster failed after 3 tries'
   end
 
   def start
     apply
     wait_til_ready
+  end
+
+  def update_cluster
+    start
   end
 
   def stop
@@ -78,6 +87,37 @@ class Cluster
     end
   end
 
+  def secret_files(namespace, secret)
+    cmd = "get secret -n #{namespace} #{secret} -o go-template "\
+          "\'--template={{range $key, $value := .data}}{{$key}}\n{{end}}\'"
+    KubeCTL.run(@kubeconfig, cmd).split("\n")
+  end
+
+  def api_ip_addresses
+    nodes = KubeCTL.run(
+      @kubeconfig,
+      'get node -l=node-role.kubernetes.io/master '\
+      '-o jsonpath=\'{range .items[*]}'\
+      '{@.metadata.name}{"\t"}{@.status.addresses[?(@.type=="ExternalIP")].address}'\
+      '{"\n"}{end}\''
+    )
+
+    nodes = nodes.split("\n").map { |node| node.split("\t") }.to_h
+
+    api_pods = KubeCTL.run(
+      @kubeconfig,
+      'get pod -n kube-system -l k8s-app=kube-apiserver '\
+      '-o \'jsonpath={range .items[*]}'\
+      '{@.metadata.name}{"\t"}{@.spec.nodeName}'\
+      '{"\n"}{end}\''
+    )
+
+    api_pods
+      .split("\n")
+      .map { |pod| pod.split("\t") }
+      .map { |pod| [pod[0], nodes[pod[1]]] }.to_h
+  end
+
   private
 
   def license_and_pull_secret_defined?
@@ -85,18 +125,6 @@ class Cluster
     pull_secret_path = 'TF_VAR_tectonic_pull_secret_path'
 
     EnvVar.set?([license_path, pull_secret_path])
-  end
-
-  def prepare_assets
-    FileUtils.cp(
-      @tfvars_file.path,
-      Dir.pwd + "/../../build/#{@name}/terraform.tfvars"
-    )
-  end
-
-  def localconfig
-    succeeded = system(env_variables, 'make -C ../.. localconfig')
-    raise 'Run localconfig failed' unless succeeded
   end
 
   def apply
@@ -147,6 +175,35 @@ class Cluster
         sleep 10
       end
     end
+
+    wait_nodes_ready
+  end
+
+  def wait_nodes_ready
+    from = Time.now
+    loop do
+      puts 'Waiting for nodes become in ready state after an update'
+      Retriable.with_retries(KubeCTL::KubeCTLCmdError, limit: 5, sleep: 10) do
+        nodes = describe_nodes
+        nodes_ready = Array.new(@tfvars_file.node_count, false)
+        nodes['items'].each_with_index do |item, index|
+          item['status']['conditions'].each do |condition|
+            if condition['type'] == 'Ready' && condition['status'] == 'True'
+              nodes_ready[index] = true
+            end
+          end
+        end
+        if nodes_ready.uniq.length == 1 && nodes_ready.uniq.include?(true)
+          puts '**All nodes are Ready!**'
+          return true
+        end
+        puts "One or more nodes are not ready yet or missing nodes. Waiting...\n" \
+             "# of returned nodes #{nodes['items'].size}. Expected #{@tfvars_file.node_count}"
+        elapsed = Time.now - from
+        raise 'waiting for all nodes to become ready timed out' if elapsed > 1200 # 20 mins timeout
+        sleep 20
+      end
+    end
   end
 
   def wait_for_bootstrapping
@@ -154,13 +211,15 @@ class Cluster
     wait_for_service('bootkube', ips)
     wait_for_service('tectonic', ips)
     puts 'HOORAY! The cluster is up'
-  rescue
+  rescue => e
     ips.each do |master_ip|
-      ['bootkube', 'tectonic', 'kubelet', 'k8s-node-bootstrap'].each do |s|
-        print_service_logs(master_ip, s)
+      save_docker_logs(master_ip, @name)
+
+      ['bootkube', 'tectonic', 'kubelet', 'k8s-node-bootstrap'].each do |service|
+        print_service_logs(master_ip, service, @name)
       end
     end
-    raise
+    raise "Error in wait_for_bootstrapping: #{e}"
   end
 
   def wait_for_service(service, ips)
@@ -200,16 +259,7 @@ class Cluster
     false
   end
 
-  def print_service_logs(ip, service)
-    command = "journalctl --no-pager -u '#{service}'"
-    begin
-      stdout, stderr, exitcode = ssh_exec(ip, command)
-      puts "Journal of #{service} service on #{ip} (exitcode #{exitcode})"
-      puts "Standard output: \n#{stdout}"
-      puts "Standard error: \n#{stderr}"
-      puts "End of journal of #{service} service on #{ip}"
-    rescue => e
-      puts "Cannot retrieve logs of service #{service} - failed to ssh exec on ip #{ip} with: #{e}"
-    end
+  def describe_nodes
+    KubeCTL.run_and_parse(@kubeconfig, 'get nodes')
   end
 end

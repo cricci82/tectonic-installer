@@ -28,6 +28,20 @@ data "ignition_systemd_unit" "docker_dropin" {
   ]
 }
 
+data "template_file" "installer_runtime_mappings" {
+  template = "${file("${path.module}/resources/kubernetes/runtime-mappings.yaml")}"
+}
+
+data "ignition_file" "installer_runtime_mappings" {
+  filesystem = "root"
+  path       = "/etc/kubernetes/installer/runtime-mappings.yaml"
+  mode       = 0644
+
+  content {
+    content = "${data.template_file.installer_runtime_mappings.rendered}"
+  }
+}
+
 data "template_file" "kubelet" {
   template = "${file("${path.module}/resources/services/kubelet.service")}"
 
@@ -36,6 +50,7 @@ data "template_file" "kubelet" {
     cloud_provider_config = "${var.cloud_provider_config != "" ? "--cloud-config=/etc/kubernetes/cloud/config" : ""}"
     cluster_dns_ip        = "${var.kube_dns_service_ip}"
     cni_bin_dir_flag      = "${var.kubelet_cni_bin_dir != "" ? "--cni-bin-dir=${var.kubelet_cni_bin_dir}" : ""}"
+    debug_config          = "${var.kubelet_debug_config}"
     kubeconfig_fetch_cmd  = "${var.kubeconfig_fetch_cmd != "" ? "ExecStartPre=${var.kubeconfig_fetch_cmd}" : ""}"
     node_label            = "${var.kubelet_node_label}"
     node_taints_param     = "${var.kubelet_node_taints != "" ? "--register-with-taints=${var.kubelet_node_taints}" : ""}"
@@ -71,6 +86,18 @@ data "ignition_systemd_unit" "init_assets" {
   name    = "init-assets.service"
   enabled  = "${var.assets_location != "" ? true : false}"
   content = "${file("${path.module}/resources/services/init-assets.service")}"
+}
+
+data "ignition_systemd_unit" "rm_assets_path_unit" {
+  name    = "rm-assets.path"
+  enabled  = true
+  content = "${file("${path.module}/resources/paths/rm-assets.path")}"
+}
+
+data "ignition_systemd_unit" "rm_assets" {
+  name    = "rm-assets.service"
+  enabled  = false
+  content = "${file("${path.module}/resources/services/rm-assets.service")}"
 }
 
 data "template_file" "s3_puller" {
@@ -140,7 +167,7 @@ data "ignition_file" "azure_udev_rules" {
 }
 
 data "template_file" "coreos_metadata" {
-  template = "${file("${path.module}/resources/services/coreos-metadata.service")}"
+  template = "${file("${path.module}/resources/dropins/10-metadata.conf")}"
 
   vars {
     metadata_provider = "${var.metadata_provider}"
@@ -157,4 +184,22 @@ data "ignition_systemd_unit" "coreos_metadata" {
       content = "${data.template_file.coreos_metadata.rendered}"
     },
   ]
+}
+
+data "template_file" "gcs_puller" {
+  vars {
+    gcloudsdk_image = "${var.container_images["gcloudsdk"]}"
+  }
+
+  template = "${file("${path.module}/resources/bin/gcs-puller.sh")}"
+}
+
+data "ignition_file" "gcs_puller" {
+  filesystem = "root"
+  path       = "/opt/gcs-puller.sh"
+  mode       = 0755
+
+  content {
+    content = "${data.template_file.gcs_puller.rendered}"
+  }
 }

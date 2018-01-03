@@ -84,5 +84,5 @@ variable "ign_s3_puller_id" {
 }
 
 variable "ignition_main" {
-  type = "string"
+  type = "list"
 }

@@ -69,6 +69,11 @@ variable "master_sg_ids" {
   description = "The security group IDs to be applied to the master nodes."
 }
 
+variable "private_endpoints" {
+  description = "If set to true, private-facing ingress resources are created."
+  default     = true
+}
+
 variable "public_endpoints" {
   description = "If set to true, public-facing ingress resources are created."
   default     = true
@@ -123,5 +128,17 @@ variable "ign_tectonic_path_unit_id" {
 }
 
 variable "ignition_main" {
+    type = "list"
+}
+
+variable "ign_init_assets_service_id" {
+  type = "string"
+}
+
+variable "ign_rm_assets_service_id" {
+  type = "string"
+}
+
+variable "ign_rm_assets_path_unit_id" {
   type = "string"
 }

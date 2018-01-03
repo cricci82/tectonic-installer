@@ -34,6 +34,14 @@ output "init_assets_service_id" {
   value = "${data.ignition_systemd_unit.init_assets.id}"
 }
 
+output "rm_assets_service_id" {
+  value = "${data.ignition_systemd_unit.rm_assets.id}"
+}
+
+output "rm_assets_path_unit_id" {
+  value = "${data.ignition_systemd_unit.rm_assets_path_unit.id}"
+}
+
 output "s3_puller_id" {
   value = "${data.ignition_file.s3_puller.id}"
 }
@@ -44,6 +52,14 @@ output "s3_puller_rendered" {
 
 output "locksmithd_service_id" {
   value = "${data.ignition_systemd_unit.locksmithd.id}"
+}
+
+output "installer_runtime_mappings_id" {
+  value = "${data.ignition_file.installer_runtime_mappings.id}"
+}
+
+output "installer_runtime_mappings_rendered" {
+  value = "${data.template_file.installer_runtime_mappings.rendered}"
 }
 
 output "installer_kubelet_env_id" {
@@ -84,4 +100,8 @@ output "coreos_metadata_dropin_id" {
 
 output "coreos_metadata_dropin_rendered" {
   value = "${data.template_file.coreos_metadata.rendered}"
+}
+
+output "gcs_puller_id" {
+  value = "${data.ignition_file.gcs_puller.id}"
 }

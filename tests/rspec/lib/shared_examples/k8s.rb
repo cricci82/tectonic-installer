@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'shared_examples/build_folder_setup'
 require 'smoke_test'
 require 'forensic'
 require 'cluster_factory'
@@ -12,8 +13,13 @@ require 'webdriver_helpers'
 require 'k8s_conformance_tests'
 
 RSpec.shared_examples 'withRunningCluster' do |tf_vars_path, vpn_tunnel = false|
+  include_examples('withBuildFolderSetup', tf_vars_path)
+  include_examples('withRunningClusterExistingBuildFolder', vpn_tunnel)
+end
+
+RSpec.shared_examples 'withRunningClusterExistingBuildFolder' do |vpn_tunnel = false|
   before(:all) do
-    @cluster = ClusterFactory.from_tf_vars(TFVarsFile.new(tf_vars_path))
+    @cluster = ClusterFactory.from_tf_vars(@tfvars_file)
     begin
       @cluster.start
     rescue => e
@@ -33,6 +39,40 @@ RSpec.shared_examples 'withRunningCluster' do |tf_vars_path, vpn_tunnel = false|
   it 'generates operator manifests' do
     expect { Operators.manifests_generated?(@cluster.manifest_path) }
       .to_not raise_error
+  end
+
+  it 'verifies api checkpoint manifests' do
+    @cluster.master_ip_addresses.each do |ip|
+      cmd = "sudo sh -c 'cat /etc/kubernetes/inactive-manifests/kube-system-kube-apiserver-*.json'"
+
+      Retriable.with_retries(limit: 20, sleep: 3) do
+        stdout, stderr, exit_code = ssh_exec(ip, cmd, 20)
+        unless exit_code.zero? && JSON.parse(stdout)
+          raise "could not retrieve manifest checkpoints via #{cmd} on ip #{ip}, "\
+                "last try failed with:\n#{stdout}\n#{stderr}\nstatus code: #{exit_code}"
+        end
+      end
+    end
+  end
+
+  it 'verifies api secret checkpoints' do
+    secrets = @cluster.secret_files('kube-system', 'kube-apiserver')
+
+    @cluster.master_ip_addresses.each do |ip|
+      path = '/etc/kubernetes/checkpoint-secrets/kube-system/kube-apiserver-*/kube-apiserver'
+      cmd = secrets
+            .map { |secret| "test -e #{path}/#{secret}" }
+            .join(' && ')
+      cmd = "sudo sh -c '#{cmd}'"
+
+      Retriable.with_retries(limit: 20, sleep: 3) do
+        stdout, stderr, exit_code = ssh_exec(ip, cmd, 20)
+        unless exit_code.zero?
+          raise "could not retrieve secret checkpoints via #{cmd} on ip #{ip}, "\
+                "last try failed with:\n#{stdout}\n#{stderr}\nstatus code: #{exit_code}"
+        end
+      end
+    end
   end
 
   it 'succeeds with the golang test suit', :smoke_tests do
@@ -57,7 +97,7 @@ RSpec.shared_examples 'withRunningCluster' do |tf_vars_path, vpn_tunnel = false|
     end
 
     after(:all) do
-      WebdriverHelpers.stop_webdriver(@driver)
+      WebdriverHelpers.stop_webdriver(@driver) if defined? @driver
     end
 
     it 'can login in the tectonic console', :ui, retry: 3, retry_wait: 10 do
@@ -74,8 +114,23 @@ RSpec.shared_examples 'withRunningCluster' do |tf_vars_path, vpn_tunnel = false|
     end
   end
 
+  describe 'scale up worker cluster' do
+    before(:all) do
+      platform = @cluster.env_variables['PLATFORM']
+      # remove platform AZURE when the JIRA https://jira.prod.coreos.systems/browse/INST-619 is fixed
+      skip_platform = %w[metal azure]
+      skip "This test is not ready to run in #{platform}" if skip_platform.include?(platform)
+    end
+
+    it 'can scale up nodes by 1 worker' do
+      @cluster.tfvars_file.add_worker_node(@cluster.tfvars_file.worker_count + 1)
+
+      expect { @cluster.update_cluster }.to_not raise_error
+    end
+  end
+
   it 'passes the k8s conformance tests', :conformance_tests do
-    conformance_test = K8sConformanceTest.new(@cluster.kubeconfig, vpn_tunnel)
+    conformance_test = K8sConformanceTest.new(@cluster.kubeconfig, vpn_tunnel, @cluster.env_variables['PLATFORM'])
     expect { conformance_test.run }.to_not raise_error
   end
 end

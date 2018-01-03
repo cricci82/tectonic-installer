@@ -1,4 +1,4 @@
-apiVersion: "extensions/v1beta1"
+apiVersion: apps/v1beta2
 kind: DaemonSet
 metadata:
   name: kube-apiserver
@@ -8,6 +8,10 @@ metadata:
     k8s-app: kube-apiserver
     tectonic-operators.coreos.com/managed-by: kube-version-operator
 spec:
+  selector:
+    matchLabels:
+      tier: control-plane
+      k8s-app: kube-apiserver
   updateStrategy:
     rollingUpdate:
       maxUnavailable: 1
@@ -17,7 +21,6 @@ spec:
       labels:
         tier: control-plane
         k8s-app: kube-apiserver
-        tectonic-operators.coreos.com/managed-by: kube-version-operator
       annotations:
         checkpointer.alpha.coreos.com/checkpoint: "true"
     spec:
@@ -29,6 +32,7 @@ spec:
         - /var/lock/api-server.lock
         - /hyperkube
         - apiserver
+        - --runtime-config=""
         - --bind-address=0.0.0.0
         - --secure-port=443
         - --insecure-port=0

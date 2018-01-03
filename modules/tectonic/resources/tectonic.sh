@@ -102,6 +102,20 @@ wait_for_pods() {
   set -e
 }
 
+asset_cleanup() {
+  echo "Cleaning up installation assets"
+
+  # shellcheck disable=SC2034
+  for d in "manifests" "auth" "bootstrap-manifests" "net-manifests" "tectonic" "tls"; do
+      rm -rf "$${ASSETS_PATH:?}/$${d:?}/"*
+  done
+
+  # shellcheck disable=SC2034
+  for f in "bootkube.sh" "tectonic.sh" "tectonic-wrapper.sh"; do
+      rm -f "$${ASSETS_PATH:?}/$${f:?}"
+  done
+}
+
 # chdir into the assets path directory
 cd "$ASSETS_PATH/tectonic"
 
@@ -126,9 +140,6 @@ kubectl create -f rbac/role-admin.yaml
 kubectl create -f rbac/role-user.yaml
 kubectl create -f rbac/binding-admin.yaml
 kubectl create -f rbac/binding-discovery.yaml
-
-echo "Creating Cluster Config For Tectonic"
-kubectl create -f cluster-config.yaml
 
 echo "Creating Tectonic ConfigMaps"
 kubectl create -f config.yaml
@@ -190,12 +201,14 @@ kubectl create -f updater/operators/kube-version-operator.yaml
 kubectl create -f updater/operators/tectonic-channel-operator.yaml
 kubectl create -f updater/operators/tectonic-prometheus-operator.yaml
 kubectl create -f updater/operators/tectonic-cluo-operator.yaml
+kubectl create -f updater/operators/tectonic-alm-operator.yaml
 
 wait_for_crd tectonic-system appversions.tco.coreos.com
 kubectl create -f updater/app_versions/app-version-tectonic-cluster.yaml
 kubectl create -f updater/app_versions/app-version-kubernetes.yaml
 kubectl create -f updater/app_versions/app-version-tectonic-monitoring.yaml
 kubectl create -f updater/app_versions/app-version-tectonic-cluo.yaml
+kubectl create -f updater/app_versions/app-version-tectonic-alm.yaml
 
 if [ "$SELF_HOSTED_ETCD" = "true" ]; then
   echo "Creating self hosted etcd resources"
@@ -206,6 +219,7 @@ fi
 
 # wait for Tectonic pods
 wait_for_pods tectonic-system
+asset_cleanup
 
 echo "Tectonic installation is done"
 exit 0

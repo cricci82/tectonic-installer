@@ -27,7 +27,9 @@ resource "aws_instance" "etcd_node" {
   instance_type          = "${var.ec2_type}"
   subnet_id              = "${element(var.subnets, count.index)}"
   key_name               = "${var.ssh_key}"
-  user_data              = "${data.ignition_config.etcd.*.rendered[count.index]}"
+  iam_instance_profile   = "${aws_iam_instance_profile.etcd_profile.name}"
+  #user_data              = "${data.ignition_config.etcd.*.rendered[count.index]}"
+  user_data              = "${var.ignition_main[count.index]}"
   vpc_security_group_ids = ["${var.sg_ids}"]
 
   lifecycle {
@@ -55,3 +57,66 @@ resource "aws_instance" "etcd_node" {
     "tectonicClusterID", "${var.cluster_id}"
   ), var.extra_tags)}"
 }
+
+resource "aws_iam_instance_profile" "etcd_profile" {
+  name = "${var.cluster_name}-etcd-profile"
+
+  role = "${var.etcd_iam_role == "" ?
+    join("|", aws_iam_role.etcd_role.*.name) :
+    join("|", data.aws_iam_role.etcd_role.*.name)
+  }"
+}
+
+data "aws_iam_role" "etcd_role" {
+  count = "${var.etcd_iam_role == "" ? 0 : 1}"
+  name  = "${var.etcd_iam_role}"
+}
+
+resource "aws_iam_role" "etcd_role" {
+  count = "${var.etcd_iam_role == "" ? 1 : 0}"
+  name  = "${var.cluster_name}-etcd-role"
+  path  = "/"
+
+  assume_role_policy = <<EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Action": "sts:AssumeRole",
+            "Principal": {
+                "Service": "ec2.amazonaws.com"
+            },
+            "Effect": "Allow",
+            "Sid": ""
+        }
+    ]
+}
+EOF
+}
+
+resource "aws_iam_role_policy" "etcd_policy" {
+  count = "${var.etcd_iam_role == "" ? 1 : 0}"
+  name  = "${var.cluster_name}_etcd_policy"
+  role  = "${aws_iam_role.etcd_role.id}"
+
+  policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "ec2:Describe*",
+      "Resource": "*"
+    },
+    {
+      "Action" : [
+        "s3:GetObject"
+      ],
+      "Resource": "arn:aws:s3:::*",
+      "Effect": "Allow"
+    }
+  ]
+}
+EOF
+}
+

@@ -80,3 +80,18 @@ variable "tls_zip" {
 variable "ign_etcd_dropin_id_list" {
   type = "list"
 }
+
+/*variable "ignition_main" {
+    type = "string"
+}
+*/
+variable "ignition_main" {
+    type = "list"
+    default = []
+}
+
+variable "etcd_iam_role" {
+  type        = "string"
+  default     = ""
+  description = "IAM role to use for the instance profiles of etcd nodes."
+}

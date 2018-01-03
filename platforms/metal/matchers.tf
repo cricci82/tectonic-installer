@@ -1,8 +1,8 @@
 module "container_linux" {
   source = "../../modules/container_linux"
 
-  channel = "${var.tectonic_container_linux_channel}"
-  version = "${var.tectonic_container_linux_version}"
+  release_channel = "${var.tectonic_container_linux_channel}"
+  release_version = "${var.tectonic_container_linux_version}"
 }
 
 // Install CoreOS to disk
@@ -38,10 +38,11 @@ module "ignition_masters" {
   image_re                  = "${var.tectonic_image_re}"
   kube_dns_service_ip       = "${module.bootkube.kube_dns_service_ip}"
   kubelet_cni_bin_dir       = "${var.tectonic_networking == "calico" || var.tectonic_networking == "canal" ? "/var/lib/cni/bin" : "" }"
+  kubelet_debug_config      = "${var.tectonic_kubelet_debug_config}"
   kubelet_node_label        = "node-role.kubernetes.io/master"
   kubelet_node_taints       = "node-role.kubernetes.io/master=:NoSchedule"
-  use_metadata              = false
   tectonic_vanilla_k8s      = "${var.tectonic_vanilla_k8s}"
+  use_metadata              = false
 }
 
 resource "matchbox_group" "controller" {
@@ -65,6 +66,7 @@ resource "matchbox_group" "controller" {
     ign_docker_dropin_json              = "${jsonencode(module.ignition_masters.docker_dropin_rendered)}"
     ign_etcd_dropin_json                = "${jsonencode(module.ignition_masters.etcd_dropin_rendered_list[count.index])}"
     ign_installer_kubelet_env_json      = "${jsonencode(module.ignition_masters.installer_kubelet_env_rendered)}"
+    ign_installer_runtime_mappings_json = "${jsonencode(module.ignition_masters.installer_runtime_mappings_rendered)}"
     ign_k8s_node_bootstrap_service_json = "${jsonencode(module.ignition_masters.k8s_node_bootstrap_service_rendered)}"
     ign_kubelet_service_json            = "${jsonencode(module.ignition_masters.kubelet_service_rendered)}"
     ign_max_user_watches_json           = "${jsonencode(module.ignition_masters.max_user_watches_rendered)}"
@@ -81,6 +83,7 @@ module "ignition_workers" {
   image_re             = "${var.tectonic_image_re}"
   kube_dns_service_ip  = "${module.bootkube.kube_dns_service_ip}"
   kubelet_cni_bin_dir  = "${var.tectonic_networking == "calico" || var.tectonic_networking == "canal" ? "/var/lib/cni/bin" : "" }"
+  kubelet_debug_config = "${var.tectonic_kubelet_debug_config}"
   kubelet_node_label   = "node-role.kubernetes.io/node"
   kubelet_node_taints  = ""
   tectonic_vanilla_k8s = "${var.tectonic_vanilla_k8s}"
@@ -107,6 +110,7 @@ resource "matchbox_group" "worker" {
 
     ign_docker_dropin_json              = "${jsonencode(module.ignition_workers.docker_dropin_rendered)}"
     ign_installer_kubelet_env_json      = "${jsonencode(module.ignition_workers.installer_kubelet_env_rendered)}"
+    ign_installer_runtime_mappings_json = "${jsonencode(module.ignition_workers.installer_runtime_mappings_rendered)}"
     ign_k8s_node_bootstrap_service_json = "${jsonencode(module.ignition_workers.k8s_node_bootstrap_service_rendered)}"
     ign_kubelet_service_json            = "${jsonencode(module.ignition_workers.kubelet_service_rendered)}"
     ign_max_user_watches_json           = "${jsonencode(module.ignition_workers.max_user_watches_rendered)}"

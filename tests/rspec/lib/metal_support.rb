@@ -69,14 +69,13 @@ module MetalSupport
     execute_command('cat /etc/resolv.conf')
   end
 
-  def self.start_matchbox
+  def self.start_matchbox(varfile)
     root = root_path
     matchbox_dir = "#{root}/matchbox"
     Dir.chdir(matchbox_dir) do
       system(env_variables_setup, 'sudo -E ./scripts/devnet create')
       wait_for_matchbox
-      puts 'Starting QEMU/KVM nodes'
-      system(env_variables_setup, 'sudo -E ./scripts/libvirt create')
+      wait_for_terraform(varfile)
     end
   end
 
@@ -118,6 +117,26 @@ module MetalSupport
     end
   end
 
+  # We fork this to run independently from the current execution because we need to wait for
+  # terraform apply to reach some state that provide the ipxe before we boot the nodes.
+  def self.wait_for_terraform(varfile)
+    fork do
+      node_mac = varfile.tectonic_metal_controller_macs[0].tr(':', '-')
+      Retriable.with_retries(limit: 24, sleep: 10) do
+        succeeded = system('curl --silent --fail -k ' \
+                    "\"http://matchbox.example.com:8080/ipxe?uuid=&mac=#{node_mac}&domain=&hostname=&serial=\"" \
+                    ' > /dev/null')
+        raise 'IPXE is not available yet' unless succeeded
+      end
+      puts 'Terraform is ready'
+      puts 'Starting QEMU/KVM nodes'
+      succeeded = system(env_variables_setup, 'sudo -E ./scripts/libvirt create')
+      raise 'Failed to start QEMU/KVM nodes' unless succeeded
+      puts 'Done with QEMU/KVM nodes'
+      exit 0
+    end
+  end
+
   def self.check_service(service)
     return true unless `sudo systemctl is-failed #{service}`.chomp.include?('failed')
     print_service_logs(service)
@@ -125,24 +144,23 @@ module MetalSupport
   end
 
   def self.print_service_logs(service)
-    cmd = "journalctl --no-pager -u '#{service}'"
-    begin
-      Open3.popen3(cmd) do |_stdin, stdout, stderr, wait_thr|
-        exit_status = wait_thr.value
-        while (line = stdout.gets)
-          stdout_output << line
-        end
-        while (line = stderr.gets)
-          stderr_output << line
-        end
-        puts "Journal of #{service} service (exitcode #{exit_status})"
-        puts "Standard output: \n#{stdout_output}"
-        puts "Standard error: \n#{stderr_output}"
-        puts "End of journal of #{service} service"
-      end
-    rescue => e
-      puts "Cannot retrieve logs of service #{service} - failed to exec with: #{e}"
-    end
+    cmd = "journalctl --no-pager -u #{service}"
+    stdout, stderr, exit_status = Open3.capture3(cmd)
+    raise "Cannot retrieve logs of service #{service}" unless exit_status.success?
+    output = "Journal of #{service} service (exitcode #{exit_status})"
+    output += "\nStandard output: \n#{stdout}"
+    output += "\nStandard error: \n#{stderr}"
+    output += "\nEnd of journal of #{service} service"
+
+    puts output
+    save_file(service, output)
+  end
+
+  def self.save_to_file(service_name, output)
+    logs_path = "#{root_path}build/#{ENV['CLUSTER']}/logs/services"
+    save_file = File.open("#{logs_path}/#{service_name}.log", 'w+')
+    save_file << output
+    save_file.close
   end
 
   def self.root_path
